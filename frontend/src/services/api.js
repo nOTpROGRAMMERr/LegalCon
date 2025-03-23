@@ -118,9 +118,9 @@ export const generateDocument = async (data) => {
 };
 
 // Generate contract directly using AI
-export const generateContractWithAI = async (clauses, language = 'English', jurisdiction = '') => {
+export const generateContractWithAI = async (clauses, language = 'English') => {
   try {
-    const response = await api.post('/ai/generate-contract', { clauses, language, jurisdiction });
+    const response = await api.post('/ai/generate-contract', { clauses, language });
     return response.data;
   } catch (error) {
     console.error('Error generating contract with AI:', error);

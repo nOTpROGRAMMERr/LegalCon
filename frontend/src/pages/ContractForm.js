@@ -36,7 +36,6 @@ const ContractForm = () => {
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState('');
   const [language, setLanguage] = useState('English');
-  const [jurisdiction, setJurisdiction] = useState('');
   const [userClauses, setUserClauses] = useState([{ title: '', content: '' }]);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -60,7 +59,6 @@ const ContractForm = () => {
           setTitle(contractData.title);
           setDocumentType(contractData.documentType);
           setLanguage(contractData.language || 'English');
-          setJurisdiction(contractData.jurisdiction || '');
           setUserClauses(contractData.userClauses || [{ title: '', content: '' }]);
           setAiSuggestions(contractData.aiSuggestions || []);
           setFinalContent(contractData.finalContent || '');
@@ -178,7 +176,7 @@ const ContractForm = () => {
       }
 
       // Generate contract using AI
-      const response = await generateContractWithAI(formattedClauses, language, jurisdiction);
+      const response = await generateContractWithAI(formattedClauses, language);
       setAiGeneratedContract(response.contract);
       setFinalContent(response.contract);
       setPreviewOpen(true);
@@ -201,8 +199,7 @@ const ContractForm = () => {
         userClauses,
         aiSuggestions: aiSuggestions.filter(s => s.used),
         finalContent,
-        language,
-        jurisdiction
+        language
       };
 
       let savedContract;
@@ -289,27 +286,6 @@ const ContractForm = () => {
                 </Select>
               </FormControl>
             </Grid>
-
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Jurisdiction</InputLabel>
-                <Select
-                  value={jurisdiction}
-                  onChange={(e) => setJurisdiction(e.target.value)}
-                >
-                  <MenuItem value="">Select Jurisdiction</MenuItem>
-                  <MenuItem value="US">United States</MenuItem>
-                  <MenuItem value="US-CA">California (USA)</MenuItem>
-                  <MenuItem value="US-NY">New York (USA)</MenuItem>
-                  <MenuItem value="UK">United Kingdom</MenuItem>
-                  <MenuItem value="IN">India</MenuItem>
-                  <MenuItem value="EU">European Union</MenuItem>
-                  <MenuItem value="CA">Canada</MenuItem>
-                  <MenuItem value="AU">Australia</MenuItem>
-                  <MenuItem value="SG">Singapore</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
           </Grid>
         </Paper>
 
@@ -347,8 +323,7 @@ const ContractForm = () => {
                     userClauses,
                     aiSuggestions,
                     finalContent,
-                    language,
-                    jurisdiction
+                    language
                   };
                   
                   setGeneratingAI(true);

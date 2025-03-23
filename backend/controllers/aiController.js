@@ -139,7 +139,7 @@ Your analysis should be detailed but concise, focusing on practical improvements
 // Generate contract directly using Groq AI
 exports.generateContract = async (req, res) => {
   try {
-    const { clauses, language = 'English', jurisdiction = '' } = req.body;
+    const { clauses, language = 'English' } = req.body;
     
     if (!clauses || clauses.length === 0) {
       return res.status(400).json({ 
@@ -152,19 +152,12 @@ exports.generateContract = async (req, res) => {
       ? 'Generate a professional contract in Hindi language. Use proper Hindi legal terminology.' 
       : '';
 
-    const jurisdictionInstruction = jurisdiction 
-      ? `This contract should be governed by the laws of ${jurisdiction}. Include appropriate jurisdiction-specific clauses and language.` 
-      : '';
-
     const prompt = `${languageInstruction}
-${jurisdictionInstruction}
 Generate a professional contract based on the following clauses:
 ${clauses.join('\n')}
 
 Please format this as a complete, legally-formatted contract with appropriate sections, 
 including but not limited to parties involved, terms, conditions, and signature blocks.
-
-${jurisdiction ? `Explicitly include a "Governing Law" clause stating that this contract is governed by the laws of ${jurisdiction}.` : ''}
 
 Format the output using markdown with the following guidelines:
 - Use # for main headings

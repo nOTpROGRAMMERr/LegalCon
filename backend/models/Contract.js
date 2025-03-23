@@ -30,10 +30,6 @@ const ContractSchema = new mongoose.Schema({
     type: String,
     default: 'English'
   },
-  jurisdiction: {
-    type: String,
-    default: ''
-  },
   createdAt: {
     type: Date,
     default: Date.now
