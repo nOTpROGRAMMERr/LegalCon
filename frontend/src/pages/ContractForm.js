@@ -28,7 +28,7 @@ import {
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import WarningIcon from '@mui/icons-material/Warning';
-import { getTemplates, getTemplatesByType, getAiSuggestions, generateDocument, createContract, generateContractWithAI, getContractById, updateContract, analyzeContractRisks } from '../services/api';
+import { getAiSuggestions, createContract, generateContractWithAI, getContractById, updateContract, analyzeContractRisks } from '../services/api';
 
 const ContractForm = () => {
   const navigate = useNavigate();
@@ -39,14 +39,10 @@ const ContractForm = () => {
   const [language, setLanguage] = useState('English');
   const [userClauses, setUserClauses] = useState([{ title: '', content: '' }]);
   const [aiSuggestions, setAiSuggestions] = useState([]);
-  const [templates, setTemplates] = useState([]);
-  const [selectedTemplate, setSelectedTemplate] = useState('');
   const [loading, setLoading] = useState(false);
-  const [generating, setGenerating] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
   const [error, setError] = useState('');
   const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState(0);
   const [aiGeneratedContract, setAiGeneratedContract] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [finalContent, setFinalContent] = useState('');
@@ -374,26 +370,6 @@ const ContractForm = () => {
                 </Select>
               </FormControl>
             </Grid>
-
-            {activeTab === 0 && !isEditMode && (
-              <Grid item xs={12} md={6}>
-                <FormControl fullWidth margin="normal">
-                  <InputLabel>Template</InputLabel>
-                  <Select
-                    value={selectedTemplate}
-                    onChange={(e) => setSelectedTemplate(e.target.value)}
-                    disabled={!documentType || templates.length === 0}
-                    required
-                  >
-                    {templates.map((template) => (
-                      <MenuItem key={template._id} value={template._id}>
-                        {template.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
-            )}
           </Grid>
         </Paper>
 
@@ -459,9 +435,8 @@ const ContractForm = () => {
           <>
             <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
               <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-                <Tabs value={activeTab} onChange={handleTabChange} aria-label="contract generation method">
-                  <Tab label="Template-Based" />
-                  <Tab label="AI-Powered (No Template)" />
+                <Tabs value={0} aria-label="contract generation method">
+                  <Tab label="AI-Powered Generation" />
                 </Tabs>
               </Box>
 
@@ -515,61 +490,25 @@ const ContractForm = () => {
               ))}
 
               <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-                {activeTab === 0 ? (
-                  <>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={getAISuggestions}
-                      disabled={loading || !documentType || userClauses.some(clause => !clause.title)}
-                      startIcon={loading && <CircularProgress size={20} color="inherit" />}
-                      sx={{ mr: 2 }}
-                    >
-                      {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      onClick={analyzeClauseRisks}
-                      disabled={analyzingRisks || userClauses.some(clause => !clause.title)}
-                      startIcon={analyzingRisks ? <CircularProgress size={20} color="inherit" /> : <WarningIcon />}
-                    >
-                      {analyzingRisks ? 'Analyzing...' : 'Analyze Risks'}
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={getAISuggestions}
-                      disabled={loading || !documentType || userClauses.some(clause => !clause.title)}
-                      startIcon={loading && <CircularProgress size={20} color="inherit" />}
-                      sx={{ mr: 2 }}
-                    >
-                      {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="warning"
-                      onClick={analyzeClauseRisks}
-                      disabled={analyzingRisks || userClauses.some(clause => !clause.title)}
-                      startIcon={analyzingRisks ? <CircularProgress size={20} color="inherit" /> : <WarningIcon />}
-                      sx={{ mr: 2 }}
-                    >
-                      {analyzingRisks ? 'Analyzing...' : 'Analyze Risks'}
-                    </Button>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={handleGenerateAIContract}
-                      disabled={generatingAI || !title || !documentType || userClauses.some(clause => !clause.title)}
-                      startIcon={generatingAI && <CircularProgress size={20} color="inherit" />}
-                    >
-                      {generatingAI ? 'Generating...' : 'Generate with AI'}
-                    </Button>
-                  </>
-                )}
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={getAISuggestions}
+                  disabled={loading || !documentType || userClauses.some(clause => !clause.title)}
+                  startIcon={loading && <CircularProgress size={20} color="inherit" />}
+                  sx={{ mr: 2 }}
+                >
+                  {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="warning"
+                  onClick={analyzeClauseRisks}
+                  disabled={analyzingRisks || userClauses.some(clause => !clause.title)}
+                  startIcon={analyzingRisks ? <CircularProgress size={20} color="inherit" /> : <WarningIcon />}
+                >
+                  {analyzingRisks ? 'Analyzing...' : 'Analyze Risks'}
+                </Button>
               </Box>
             </Paper>
 
@@ -698,21 +637,19 @@ const ContractForm = () => {
               </Paper>
             )}
 
-            {activeTab === 0 && (
-              <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="large"
-                  onClick={handleGenerateContract}
-                  disabled={generating || !title || !documentType || !selectedTemplate || userClauses.some(clause => !clause.title)}
-                  startIcon={generating && <CircularProgress size={24} color="inherit" />}
-                  sx={{ minWidth: 200 }}
-                >
-                  {generating ? 'Generating...' : 'Generate & Save Contract'}
-                </Button>
-              </Box>
-            )}
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                onClick={handleGenerateAIContract}
+                disabled={generatingAI || !title || !documentType || userClauses.some(clause => !clause.title)}
+                startIcon={generatingAI && <CircularProgress size={24} color="inherit" />}
+                sx={{ minWidth: 200 }}
+              >
+                {generatingAI ? 'Generating...' : 'Generate with AI'}
+              </Button>
+            </Box>
           </>
         )}
       </Box>
