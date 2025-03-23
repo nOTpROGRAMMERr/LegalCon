@@ -139,7 +139,7 @@ Your analysis should be detailed but concise, focusing on practical improvements
 // Generate contract directly using Groq AI
 exports.generateContract = async (req, res) => {
   try {
-    const { clauses, language = 'English' } = req.body;
+    const { clauses, language = 'English', jurisdiction = '' } = req.body;
     
     if (!clauses || clauses.length === 0) {
       return res.status(400).json({ 
@@ -152,12 +152,21 @@ exports.generateContract = async (req, res) => {
       ? 'Generate a professional contract in Hindi language. Use proper Hindi legal terminology.' 
       : '';
 
+    const jurisdictionInstruction = jurisdiction
+      ? `This contract is governed by the laws of ${jurisdiction}. Please ensure the contract complies with the legal requirements of this jurisdiction.`
+      : '';
+
     const prompt = `${languageInstruction}
+${jurisdictionInstruction}
 Generate a professional contract based on the following clauses:
 ${clauses.join('\n')}
 
 Please format this as a complete, legally-formatted contract with appropriate sections, 
 including but not limited to parties involved, terms, conditions, and signature blocks.
+
+${jurisdiction ? `Include a governing law clause specifying ${jurisdiction} as the jurisdiction.` : ''}
+
+IMPORTANT: Start directly with the contract title or header. DO NOT include any introduction, explanation, or context sentences like "Here is a comprehensive contract draft..." or "I have prepared a contract...".
 
 Format the output using markdown with the following guidelines:
 - Use # for main headings
@@ -212,7 +221,7 @@ Do not use any repetitive signature blocks or multiple signature sections.`;
       messages: [
         {
           role: "system",
-          content: "You are a legal expert specializing in drafting professional contracts. Your output is meticulously formatted, legally sound, and comprehensive."
+          content: "You are a legal expert specializing in drafting professional contracts. Your output is meticulously formatted, legally sound, and comprehensive. Always start contracts directly with the title or header, without any introductory text or explanation. Never include phrases like 'Here is a contract...' or 'I have prepared...' in your output."
         },
         {
           role: "user",
@@ -247,6 +256,13 @@ Do not use any repetitive signature blocks or multiple signature sections.`;
       // Clean up any model artifacts
       let cleaned = markdown.replace(/\.scalablytypedassistant<\|endheaderid\|>/g, '');
       cleaned = cleaned.replace(/\.scalablytypedassistant<\|endheader_id\|>/g, '');
+      
+      // Remove introductory sentences that the AI sometimes adds
+      cleaned = cleaned.replace(/^Here is a .*?(?=\n\n|#)/s, '');
+      cleaned = cleaned.replace(/^I have .*?(?=\n\n|#)/s, '');
+      cleaned = cleaned.replace(/^Below is .*?(?=\n\n|#)/s, '');
+      cleaned = cleaned.replace(/^The following .*?(?=\n\n|#)/s, '');
+      cleaned = cleaned.replace(/^This is .*?(?=\n\n|#)/s, '');
       
       // Pre-process the markdown to improve spacing
       // Add consistent spacing before headings for better section separation
