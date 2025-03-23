@@ -18,6 +18,8 @@
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "groq-sdk": "^0.17.0",
+    "html-pdf": "^3.0.1",
+    "html-to-text": "^9.0.5",
     "mongoose": "^8.12.2",
     "pdf-lib": "^1.17.1"
   },

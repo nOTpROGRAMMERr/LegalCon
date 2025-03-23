@@ -11,4 +11,7 @@ router.post('/generate', aiController.generateDocument);
 // POST generate contract directly from clauses using AI
 router.post('/generate-contract', aiController.generateContract);
 
+// POST analyze clauses for risk assessment
+router.post('/analyze-risks', aiController.analyzeRisks);
+
 module.exports = router; 

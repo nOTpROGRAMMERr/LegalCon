@@ -9,6 +9,80 @@ const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY,
 });
 
+// Analyze clauses for potential risks
+exports.analyzeRisks = async (req, res) => {
+  try {
+    const { clauses } = req.body;
+    
+    if (!clauses || clauses.length === 0) {
+      return res.status(400).json({ 
+        message: 'Missing required fields: clauses are required'
+      });
+    }
+
+    // For development, use mock data if no API key
+    if (!process.env.GROQ_API_KEY) {
+      const mockRiskAnalysis = generateMockRiskAnalysis(clauses);
+      return res.status(200).json({ riskAnalysis: mockRiskAnalysis });
+    }
+
+    // Format the prompt for the AI
+    const prompt = `Analyze the following contract clauses for potential legal, business, and compliance risks. For each clause, provide:
+1. Risk Level (High, Medium, Low)
+2. Risk Description
+3. Suggested Improvements
+
+Here are the clauses:
+
+${clauses.map((clause, index) => `CLAUSE ${index + 1}: ${clause.title}
+${clause.content || '[Empty content - This clause has no content specified]'}
+`).join('\n')}
+
+Format your response as a JSON array where each item contains:
+- clauseIndex: The index of the clause (starting from 0)
+- riskLevel: "high", "medium", or "low"
+- risks: Array of specific risks identified
+- suggestions: Array of suggested improvements to mitigate risks
+
+For clauses with empty content, analyze based on the title and suggest appropriate content.
+
+Your analysis should be detailed but concise, focusing on practical improvements.`;
+
+    // Call Groq API for analysis
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a legal expert specializing in contract risk analysis. Provide thorough, accurate risk assessments and practical improvement suggestions for contract clauses."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "llama3-70b-8192",
+      response_format: { type: "json_object" }
+    });
+
+    // Parse the response to get risk analysis
+    const responseContent = completion.choices[0].message.content;
+    let parsedResponse;
+    
+    try {
+      parsedResponse = JSON.parse(responseContent);
+    } catch (error) {
+      console.error('Error parsing JSON response:', error);
+      return res.status(500).json({ message: 'Error processing risk analysis results' });
+    }
+
+    // Return the risk analysis
+    res.status(200).json({ riskAnalysis: parsedResponse });
+  } catch (error) {
+    console.error('Error analyzing risks:', error);
+    res.status(500).json({ message: 'Failed to analyze risks', error: error.message });
+  }
+};
+
 // Generate contract directly using Groq AI
 exports.generateContract = async (req, res) => {
   try {
@@ -57,83 +131,52 @@ Date: ________________
 
 Do not use any repetitive signature blocks or multiple signature sections.`;
 
-    // Call the AI model
+    // If no API key available, return a mock contract
+    if (!process.env.GROQ_API_KEY) {
+      return res.json({ contract: `<div class="contract-document">
+        <h1 class="contract-section">Mock Contract</h1>
+        <p class="contract-paragraph">This is a mock contract for testing purposes. In production, this would contain real AI-generated content based on your clauses.</p>
+        <h2 class="contract-subsection">Clauses</h2>
+        <p class="contract-paragraph">${clauses.join('<br><br>')}</p>
+        <h2 class="contract-subsection">Signatures</h2>
+        <p class="contract-paragraph">
+          <div>Client: <div class="signature-line"></div></div>
+          <div>Date: <div class="signature-line"></div></div>
+          <br>
+          <div>Contractor: <div class="signature-line"></div></div>
+          <div>Date: <div class="signature-line"></div></div>
+        </p>
+      </div>` });
+    }
+
+    // Call Groq AI API to generate contract
     const completion = await groq.chat.completions.create({
       messages: [
-        { 
-          role: 'system', 
-          content: 'You are a professional contract drafter with legal expertise. Create detailed, professional contracts based on the provided clauses. Always format signature blocks in a clean, professional way without repetition. Avoid generating duplicate signature sections.'
+        {
+          role: "system",
+          content: "You are a legal expert specializing in drafting professional contracts. Your output is meticulously formatted, legally sound, and comprehensive."
         },
-        { role: 'user', content: prompt }
+        {
+          role: "user",
+          content: prompt
+        }
       ],
-      model: 'llama-3.3-70b-versatile',
-      temperature: 0.3, // Lower temperature for more consistent outputs
-      max_tokens: 4000, // Ensure we have enough tokens for a complete contract
+      model: "llama3-70b-8192"
     });
 
-    const contractText = completion.choices[0]?.message?.content || 'Error generating contract';
-    
-    // Function to clean up duplicate signature sections
+    // Get the generated contract
+    const contractText = completion.choices[0].message.content;
+
+    // Function to clean up duplicate signature blocks that AI sometimes generates
     const cleanupDuplicateSignatures = (text) => {
-      // Find the first occurrence of a signature section
-      const signatureSectionPatterns = [
-        /## Signatures?/i,
-        /IN WITNESS WHEREOF/i,
-        /The parties have executed this Agreement/i,
-        /AGREED AND ACCEPTED:/i
-      ];
+      const signatureSectionRegex = /## Signatures.*?(?=##|$)/gs;
+      const matches = text.match(signatureSectionRegex);
       
-      let firstSignatureIndex = -1;
-      
-      // Find the first occurrence of any signature pattern
-      for (const pattern of signatureSectionPatterns) {
-        const match = text.match(pattern);
-        if (match && match.index) {
-          if (firstSignatureIndex === -1 || match.index < firstSignatureIndex) {
-            firstSignatureIndex = match.index;
-          }
-        }
-      }
-      
-      // If we found a signature section, keep only the content up to that point 
-      // plus that signature section
-      if (firstSignatureIndex !== -1) {
-        // Get everything before the signature section
-        const beforeSignature = text.substring(0, firstSignatureIndex);
-        
-        // Find the signature section and include only one complete signature block
-        const remainingText = text.substring(firstSignatureIndex);
-        const lines = remainingText.split('\n');
-        
-        let signatureSection = [];
-        let hasClientSignature = false;
-        let hasFreelancerSignature = false;
-        
-        // Collect lines until we have both signature blocks
-        for (const line of lines) {
-          signatureSection.push(line);
-          
-          if (line.match(/client|customer/i) && line.match(/name|signature|sign/i)) {
-            hasClientSignature = true;
-          }
-          if (line.match(/freelancer|contractor|provider/i) && line.match(/name|signature|sign/i)) {
-            hasFreelancerSignature = true;
-          }
-          
-          // If we have both signature blocks, stop collecting lines
-          if (hasClientSignature && hasFreelancerSignature && signatureSection.length > 10) {
-            break;
-          }
-        }
-        
-        // Add extra signature lines if needed
-        if (!hasClientSignature || !hasFreelancerSignature) {
-          signatureSection.push('\n**Client:**\n\n________________________\nName: \nTitle: \nDate: ________________\n');
-          signatureSection.push('\n**Freelancer/Contractor:**\n\n________________________\nName: \nTitle: \nDate: ________________');
-        }
-        
-        // Join the cleaned signature section
-        return beforeSignature + signatureSection.join('\n');
+      if (matches && matches.length > 1) {
+        // Keep only the first signature section
+        return text.replace(signatureSectionRegex, (match, index) => {
+          return index === 0 ? match : '';
+        });
       }
       
       return text;
@@ -246,18 +289,64 @@ exports.getSuggestions = async (req, res) => {
       });
     }
 
-    // Mock AI API call (in a real implementation, this would be a call to an actual AI service)
-    // In a production environment, replace this with an actual API call to your AI model
-    // const aiResponse = await axios.post(process.env.AI_API_URL, {
-    //   documentType,
-    //   userClauses,
-    //   language
-    // });
-    
-    // Mock AI suggestions for development
-    const suggestions = generateMockSuggestions(documentType, userClauses, language);
+    // For development, use mock data if no API key
+    if (!process.env.GROQ_API_KEY) {
+      // Mock AI suggestions for development
+      const suggestions = generateMockSuggestions(documentType, userClauses, language);
+      return res.status(200).json({ suggestions });
+    }
 
-    res.status(200).json({ suggestions });
+    // Format the prompt for the AI to generate contextual suggestions
+    const prompt = `Generate relevant additional clause suggestions for a ${documentType} contract based on the following existing clauses.
+
+Existing clauses:
+${userClauses.map((clause, index) => `${index + 1}. ${clause.title}: ${clause.content}`).join('\n')}
+
+Based on these clauses, suggest 3-4 additional clauses that would complement the contract. These should be clauses that are missing but would be important to include for this type of document.
+
+For the ${documentType} document type, think about common industry-standard clauses that would make this document more comprehensive and legally sound.
+
+Output should be formatted as a JSON array with each object containing:
+- title: The title of the suggested clause
+- content: The detailed clause content
+
+Each suggestion should be specific, legally appropriate, and contextually relevant to the existing clauses.`;
+
+    // Call Groq API for suggestions
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a legal expert specializing in contract drafting. You provide legally sound, contextually appropriate clause suggestions for various types of contracts. Your suggestions should be detailed and professionally written."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "llama3-70b-8192",
+      response_format: { type: "json_object" }
+    });
+
+    // Parse the response to get suggestions
+    const responseContent = completion.choices[0].message.content;
+    let parsedResponse;
+    
+    try {
+      parsedResponse = JSON.parse(responseContent);
+      // Ensure the response has a suggestions array
+      if (!parsedResponse.suggestions && Array.isArray(parsedResponse)) {
+        parsedResponse = { suggestions: parsedResponse };
+      } else if (!parsedResponse.suggestions) {
+        // If no suggestions array and not an array itself, create one
+        parsedResponse = { suggestions: [] };
+      }
+    } catch (error) {
+      console.error('Error parsing JSON response for suggestions:', error);
+      return res.status(500).json({ message: 'Error processing AI suggestions' });
+    }
+
+    res.status(200).json(parsedResponse);
   } catch (error) {
     console.error('Error getting AI suggestions:', error);
     res.status(500).json({ 
@@ -365,4 +454,52 @@ function generateMockSuggestions(documentType, userClauses, language) {
   }
   
   return suggestions;
-} 
+}
+
+// Helper function to generate mock risk analysis for development
+function generateMockRiskAnalysis(clauses) {
+  const riskLevels = ['low', 'medium', 'high'];
+  return clauses.map((clause, index) => {
+    const randomRiskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
+    
+    const risks = [];
+    const suggestions = [];
+    
+    if (clause.title.toLowerCase().includes('confidential')) {
+      risks.push('No definition of what constitutes confidential information');
+      risks.push('No exceptions for publicly available information');
+      suggestions.push('Clearly define what specific information is considered confidential');
+      suggestions.push('Add exceptions for information that becomes publicly available through no fault of the receiving party');
+    } else if (clause.title.toLowerCase().includes('payment')) {
+      risks.push('No specific payment terms or methods defined');
+      risks.push('No consequences for late payment beyond fees');
+      suggestions.push('Specify acceptable payment methods and detailed terms');
+      suggestions.push('Include right to suspend services if payment is significantly delayed');
+    } else if (clause.title.toLowerCase().includes('termination')) {
+      risks.push('No notice period for termination specified');
+      risks.push('No provisions for handling ongoing obligations after termination');
+      suggestions.push('Add clear notice period requirements for termination');
+      suggestions.push('Specify which obligations survive termination of the agreement');
+    } else {
+      // Generic risks for any other clause type
+      risks.push('Vague or ambiguous language could lead to different interpretations');
+      risks.push('Missing specific details that could be important in a dispute');
+      suggestions.push('Use more specific and precise language to avoid ambiguity');
+      suggestions.push('Include more detailed provisions to cover potential edge cases');
+    }
+    
+    return {
+      clauseIndex: index,
+      riskLevel: randomRiskLevel,
+      risks: risks,
+      suggestions: suggestions
+    };
+  });
+}
+
+module.exports = { 
+  analyzeRisks: exports.analyzeRisks, 
+  getSuggestions: exports.getSuggestions, 
+  generateDocument: exports.generateDocument, 
+  generateContract: exports.generateContract 
+}; 

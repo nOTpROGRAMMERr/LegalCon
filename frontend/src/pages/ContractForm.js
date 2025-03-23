@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -27,10 +27,13 @@ import {
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
-import { getTemplates, getTemplatesByType, getAiSuggestions, generateDocument, createContract, generateContractWithAI } from '../services/api';
+import WarningIcon from '@mui/icons-material/Warning';
+import { getTemplates, getTemplatesByType, getAiSuggestions, generateDocument, createContract, generateContractWithAI, getContractById, updateContract, analyzeContractRisks } from '../services/api';
 
 const ContractForm = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEditMode = !!id;
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState('');
   const [language, setLanguage] = useState('English');
@@ -47,6 +50,34 @@ const ContractForm = () => {
   const [aiGeneratedContract, setAiGeneratedContract] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [finalContent, setFinalContent] = useState('');
+  const [riskAnalysis, setRiskAnalysis] = useState([]);
+  const [analyzingRisks, setAnalyzingRisks] = useState(false);
+  const [previewTab, setPreviewTab] = useState(0);
+
+  // Fetch contract data if in edit mode
+  useEffect(() => {
+    if (isEditMode) {
+      const fetchContract = async () => {
+        setLoading(true);
+        try {
+          const contractData = await getContractById(id);
+          setTitle(contractData.title);
+          setDocumentType(contractData.documentType);
+          setLanguage(contractData.language || 'English');
+          setUserClauses(contractData.userClauses || [{ title: '', content: '' }]);
+          setAiSuggestions(contractData.aiSuggestions || []);
+          setFinalContent(contractData.finalContent || '');
+        } catch (error) {
+          setError('Error fetching contract data');
+          setSnackbarOpen(true);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      fetchContract();
+    }
+  }, [id, isEditMode]);
 
   // Fetch templates on component mount
   useEffect(() => {
@@ -116,10 +147,30 @@ const ContractForm = () => {
     setAiSuggestions(updatedSuggestions);
   };
 
+  // Analyze clauses for risks
+  const analyzeClauseRisks = async () => {
+    if (userClauses.some(clause => !clause.title)) {
+      setError('Please fill in all clause titles before analyzing risks');
+      setSnackbarOpen(true);
+      return;
+    }
+
+    setAnalyzingRisks(true);
+    try {
+      const response = await analyzeContractRisks(userClauses);
+      setRiskAnalysis(response.riskAnalysis);
+    } catch (error) {
+      setError('Error analyzing clause risks');
+      setSnackbarOpen(true);
+    } finally {
+      setAnalyzingRisks(false);
+    }
+  };
+
   // Get AI suggestions
   const getAISuggestions = async () => {
-    if (!documentType || userClauses.some(clause => !clause.title || !clause.content)) {
-      setError('Please fill in all clause fields and select a document type');
+    if (!documentType) {
+      setError('Please select a document type');
       setSnackbarOpen(true);
       return;
     }
@@ -148,8 +199,8 @@ const ContractForm = () => {
 
   // Generate contract directly with AI
   const handleGenerateAIContract = async () => {
-    if (!title || !documentType || userClauses.some(clause => !clause.title || !clause.content)) {
-      setError('Please fill in all required fields');
+    if (!title || !documentType || userClauses.some(clause => !clause.title)) {
+      setError('Please provide a title, document type, and clause titles');
       setSnackbarOpen(true);
       return;
     }
@@ -158,8 +209,16 @@ const ContractForm = () => {
     try {
       // Format clauses for AI
       const formattedClauses = userClauses.map(clause => 
-        `${clause.title}: ${clause.content}`
+        `${clause.title}: ${clause.content || '[Please generate content for this clause]'}`
       );
+      
+      // Add selected AI suggestions if any
+      const selectedSuggestions = aiSuggestions.filter(s => s.used);
+      if (selectedSuggestions.length > 0) {
+        selectedSuggestions.forEach(suggestion => {
+          formattedClauses.push(`${suggestion.title}: ${suggestion.content}`);
+        });
+      }
 
       // Generate contract using AI
       const response = await generateContractWithAI(formattedClauses);
@@ -188,8 +247,20 @@ const ContractForm = () => {
         language
       };
 
-      const savedContract = await createContract(contractData);
+      let savedContract;
+      if (isEditMode) {
+        savedContract = await updateContract(id, contractData);
+      } else {
+        savedContract = await createContract(contractData);
+      }
+      
       setPreviewOpen(false);
+      
+      // Analyze the generated contract for risks if not already done
+      if (riskAnalysis.length === 0) {
+        analyzeClauseRisks();
+      }
+      
       navigate(`/preview/${savedContract._id}`);
     } catch (error) {
       setError('Error saving contract');
@@ -201,8 +272,8 @@ const ContractForm = () => {
 
   // Generate and save contract using template
   const handleGenerateContract = async () => {
-    if (!title || !documentType || !selectedTemplate || userClauses.some(clause => !clause.title || !clause.content)) {
-      setError('Please fill in all required fields');
+    if (!title || !documentType || !selectedTemplate || userClauses.some(clause => !clause.title)) {
+      setError('Please provide a title, document type, template, and clause titles');
       setSnackbarOpen(true);
       return;
     }
@@ -227,7 +298,13 @@ const ContractForm = () => {
         language
       };
 
-      const savedContract = await createContract(contractData);
+      let savedContract;
+      if (isEditMode) {
+        savedContract = await updateContract(id, contractData);
+      } else {
+        savedContract = await createContract(contractData);
+      }
+      
       navigate(`/preview/${savedContract._id}`);
     } catch (error) {
       setError('Error generating contract');
@@ -241,10 +318,12 @@ const ContractForm = () => {
     <Container maxWidth="lg">
       <Box sx={{ my: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          Create Legal Document
+          {isEditMode ? 'Edit Legal Document' : 'Create Legal Document'}
         </Typography>
         <Typography variant="subtitle1" color="textSecondary" paragraph>
-          Fill in the details below to create your legal document. Our AI will provide suggestions based on your input.
+          {isEditMode 
+            ? 'Modify the details below to update your legal document.' 
+            : 'Fill in the details below to create your legal document. Our AI will provide suggestions based on your input.'}
         </Typography>
 
         <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
@@ -296,7 +375,7 @@ const ContractForm = () => {
               </FormControl>
             </Grid>
 
-            {activeTab === 0 && (
+            {activeTab === 0 && !isEditMode && (
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth margin="normal">
                   <InputLabel>Template</InputLabel>
@@ -318,145 +397,323 @@ const ContractForm = () => {
           </Grid>
         </Paper>
 
-        <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
-          <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
-            <Tabs value={activeTab} onChange={handleTabChange} aria-label="contract generation method">
-              <Tab label="Template-Based" />
-              <Tab label="AI-Powered (No Template)" />
-            </Tabs>
-          </Box>
-
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">Your Clauses</Typography>
-            <Button
-              startIcon={<AddIcon />}
-              onClick={addClause}
-              color="primary"
-              variant="outlined"
-            >
-              Add Clause
-            </Button>
-          </Box>
-          
-          {userClauses.map((clause, index) => (
-            <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 2 }}>
-              <Grid container spacing={2} alignItems="center">
-                <Grid item xs={11}>
-                  <TextField
-                    fullWidth
-                    label="Clause Title"
-                    value={clause.title}
-                    onChange={(e) => handleClauseChange(index, 'title', e.target.value)}
-                    required
-                    margin="normal"
-                  />
-                </Grid>
-                <Grid item xs={1}>
-                  <IconButton
-                    color="error"
-                    onClick={() => removeClause(index)}
-                    disabled={userClauses.length <= 1}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Clause Content"
-                    value={clause.content}
-                    onChange={(e) => handleClauseChange(index, 'content', e.target.value)}
-                    required
-                    multiline
-                    rows={4}
-                    margin="normal"
-                  />
-                </Grid>
-              </Grid>
-            </Box>
-          ))}
-
-          <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
-            {activeTab === 0 ? (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={getAISuggestions}
-                disabled={loading || !documentType || userClauses.some(clause => !clause.title || !clause.content)}
-                startIcon={loading && <CircularProgress size={20} color="inherit" />}
-                sx={{ mr: 2 }}
-              >
-                {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
-              </Button>
-            ) : (
-              <Button
-                variant="contained"
-                color="primary"
-                onClick={handleGenerateAIContract}
-                disabled={generatingAI || !title || !documentType || userClauses.some(clause => !clause.title || !clause.content)}
-                startIcon={generatingAI && <CircularProgress size={20} color="inherit" />}
-                sx={{ mr: 2 }}
-              >
-                {generatingAI ? 'Generating...' : 'Generate with AI'}
-              </Button>
-            )}
-          </Box>
-        </Paper>
-
-        {activeTab === 0 && aiSuggestions.length > 0 && (
+        {isEditMode ? (
           <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
             <Typography variant="h6" gutterBottom>
-              AI Suggestions
+              Edit Contract Content
             </Typography>
-            <Typography variant="body2" color="textSecondary" paragraph>
-              Select the suggestions you want to include in your document:
-            </Typography>
-            
-            {aiSuggestions.map((suggestion, index) => (
-              <Box 
-                key={index} 
-                sx={{ 
-                  mb: 3, 
-                  p: 2, 
-                  border: '1px solid #e0e0e0', 
-                  borderRadius: 2,
-                  backgroundColor: suggestion.used ? 'rgba(63, 81, 181, 0.08)' : 'transparent',
-                  transition: 'background-color 0.3s'
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    {suggestion.title}
-                  </Typography>
-                  <Chip
-                    label={suggestion.used ? "Selected" : "Select"}
-                    color={suggestion.used ? "primary" : "default"}
-                    onClick={() => toggleSuggestion(index)}
-                    clickable
-                  />
-                </Box>
-                <Typography variant="body1">
-                  {suggestion.content}
-                </Typography>
-              </Box>
-            ))}
-          </Paper>
-        )}
-
-        {activeTab === 0 && (
-          <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
-            <Button
-              variant="contained"
-              color="primary"
-              size="large"
-              onClick={handleGenerateContract}
-              disabled={generating || !title || !documentType || !selectedTemplate || userClauses.some(clause => !clause.title || !clause.content)}
-              startIcon={generating && <CircularProgress size={24} color="inherit" />}
-              sx={{ minWidth: 200 }}
+            <Box 
+              sx={{ 
+                border: '1px solid #e0e0e0', 
+                borderRadius: 1, 
+                p: 2, 
+                minHeight: '400px',
+                backgroundColor: '#fff',
+                overflowY: 'auto'
+              }}
             >
-              {generating ? 'Generating...' : 'Generate & Save Contract'}
-            </Button>
-          </Box>
+              <div 
+                dangerouslySetInnerHTML={{ __html: finalContent }} 
+                contentEditable={true}
+                style={{ minHeight: '400px' }}
+                onBlur={(e) => setFinalContent(e.target.innerHTML)}
+              />
+            </Box>
+            <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+              <Button
+                variant="contained"
+                color="primary"
+                size="large"
+                onClick={() => {
+                  const contractData = {
+                    title,
+                    documentType,
+                    userClauses,
+                    aiSuggestions,
+                    finalContent,
+                    language
+                  };
+                  
+                  setGenerating(true);
+                  updateContract(id, contractData)
+                    .then(savedContract => {
+                      navigate(`/preview/${savedContract._id}`);
+                    })
+                    .catch(err => {
+                      setError('Error updating contract');
+                      setSnackbarOpen(true);
+                    })
+                    .finally(() => {
+                      setGenerating(false);
+                    });
+                }}
+                disabled={generating || !title || !documentType}
+                startIcon={generating && <CircularProgress size={24} color="inherit" />}
+                sx={{ minWidth: 200 }}
+              >
+                {generating ? 'Updating...' : 'Update Contract'}
+              </Button>
+            </Box>
+          </Paper>
+        ) : (
+          <>
+            <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                <Tabs value={activeTab} onChange={handleTabChange} aria-label="contract generation method">
+                  <Tab label="Template-Based" />
+                  <Tab label="AI-Powered (No Template)" />
+                </Tabs>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                <Typography variant="h6">Your Clauses</Typography>
+                <Button
+                  startIcon={<AddIcon />}
+                  onClick={addClause}
+                  color="primary"
+                  variant="outlined"
+                >
+                  Add Clause
+                </Button>
+              </Box>
+              
+              {userClauses.map((clause, index) => (
+                <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 2 }}>
+                  <Grid container spacing={2} alignItems="center">
+                    <Grid item xs={11}>
+                      <TextField
+                        fullWidth
+                        label="Clause Title"
+                        value={clause.title}
+                        onChange={(e) => handleClauseChange(index, 'title', e.target.value)}
+                        required
+                        margin="normal"
+                      />
+                    </Grid>
+                    <Grid item xs={1}>
+                      <IconButton
+                        color="error"
+                        onClick={() => removeClause(index)}
+                        disabled={userClauses.length <= 1}
+                      >
+                        <DeleteIcon />
+                      </IconButton>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Clause Content"
+                        value={clause.content}
+                        onChange={(e) => handleClauseChange(index, 'content', e.target.value)}
+                        multiline
+                        rows={4}
+                        margin="normal"
+                      />
+                    </Grid>
+                  </Grid>
+                </Box>
+              ))}
+
+              <Box sx={{ mt: 3, display: 'flex', justifyContent: 'center' }}>
+                {activeTab === 0 ? (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={getAISuggestions}
+                      disabled={loading || !documentType || userClauses.some(clause => !clause.title)}
+                      startIcon={loading && <CircularProgress size={20} color="inherit" />}
+                      sx={{ mr: 2 }}
+                    >
+                      {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      onClick={analyzeClauseRisks}
+                      disabled={analyzingRisks || userClauses.some(clause => !clause.title)}
+                      startIcon={analyzingRisks ? <CircularProgress size={20} color="inherit" /> : <WarningIcon />}
+                    >
+                      {analyzingRisks ? 'Analyzing...' : 'Analyze Risks'}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={getAISuggestions}
+                      disabled={loading || !documentType || userClauses.some(clause => !clause.title)}
+                      startIcon={loading && <CircularProgress size={20} color="inherit" />}
+                      sx={{ mr: 2 }}
+                    >
+                      {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="warning"
+                      onClick={analyzeClauseRisks}
+                      disabled={analyzingRisks || userClauses.some(clause => !clause.title)}
+                      startIcon={analyzingRisks ? <CircularProgress size={20} color="inherit" /> : <WarningIcon />}
+                      sx={{ mr: 2 }}
+                    >
+                      {analyzingRisks ? 'Analyzing...' : 'Analyze Risks'}
+                    </Button>
+                    <Button
+                      variant="contained"
+                      color="primary"
+                      onClick={handleGenerateAIContract}
+                      disabled={generatingAI || !title || !documentType || userClauses.some(clause => !clause.title)}
+                      startIcon={generatingAI && <CircularProgress size={20} color="inherit" />}
+                    >
+                      {generatingAI ? 'Generating...' : 'Generate with AI'}
+                    </Button>
+                  </>
+                )}
+              </Box>
+            </Paper>
+
+            {/* Risk Analysis Section */}
+            {!isEditMode && riskAnalysis.length > 0 && (
+              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  Risk Analysis
+                </Typography>
+                <Typography variant="body2" color="textSecondary" paragraph>
+                  The following risks were identified in your clauses:
+                </Typography>
+                
+                {riskAnalysis.map((analysis) => {
+                  const clause = userClauses[analysis.clauseIndex];
+                  let chipColor = 'success';
+                  
+                  if (analysis.riskLevel === 'medium') {
+                    chipColor = 'warning';
+                  } else if (analysis.riskLevel === 'high') {
+                    chipColor = 'error';
+                  }
+                  
+                  return (
+                    <Box 
+                      key={analysis.clauseIndex} 
+                      sx={{ 
+                        mb: 3, 
+                        p: 2, 
+                        border: '1px solid #e0e0e0', 
+                        borderRadius: 2,
+                        borderLeftWidth: 5,
+                        borderLeftColor: 
+                          analysis.riskLevel === 'high' 
+                            ? '#f44336' 
+                            : analysis.riskLevel === 'medium' 
+                              ? '#ff9800' 
+                              : '#4caf50'
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="subtitle1" fontWeight="bold">
+                          {clause.title}
+                        </Typography>
+                        <Chip
+                          label={`${analysis.riskLevel.toUpperCase()} RISK`}
+                          color={chipColor}
+                          size="small"
+                        />
+                      </Box>
+                      
+                      <Box sx={{ mb: 2 }}>
+                        <Typography variant="body2" color="textSecondary" gutterBottom>
+                          Original clause:
+                        </Typography>
+                        <Typography variant="body2" sx={{ backgroundColor: '#f5f5f5', p: 1, borderRadius: 1 }}>
+                          {clause.content}
+                        </Typography>
+                      </Box>
+                      
+                      <Typography variant="body2" color="textSecondary" gutterBottom>
+                        Identified risks:
+                      </Typography>
+                      <ul style={{ marginTop: 8, marginBottom: 16 }}>
+                        {analysis.risks.map((risk, index) => (
+                          <li key={index}>
+                            <Typography variant="body2">{risk}</Typography>
+                          </li>
+                        ))}
+                      </ul>
+                      
+                      <Typography variant="body2" color="textSecondary" gutterBottom>
+                        Suggestions for improvement:
+                      </Typography>
+                      <ul style={{ marginTop: 8 }}>
+                        {analysis.suggestions.map((suggestion, index) => (
+                          <li key={index}>
+                            <Typography variant="body2">{suggestion}</Typography>
+                          </li>
+                        ))}
+                      </ul>
+                    </Box>
+                  );
+                })}
+              </Paper>
+            )}
+
+            {/* AI Suggestions section */}
+            {aiSuggestions.length > 0 && (
+              <Paper elevation={3} sx={{ p: 3, mt: 4 }}>
+                <Typography variant="h6" gutterBottom>
+                  AI Suggestions
+                </Typography>
+                <Typography variant="body2" color="textSecondary" paragraph>
+                  Select the suggestions you want to include in your document:
+                </Typography>
+                
+                {aiSuggestions.map((suggestion, index) => (
+                  <Box 
+                    key={index} 
+                    sx={{ 
+                      mb: 3, 
+                      p: 2, 
+                      border: '1px solid #e0e0e0', 
+                      borderRadius: 2,
+                      backgroundColor: suggestion.used ? 'rgba(63, 81, 181, 0.08)' : 'transparent',
+                      transition: 'background-color 0.3s'
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="subtitle1" fontWeight="bold">
+                        {suggestion.title}
+                      </Typography>
+                      <Chip
+                        label={suggestion.used ? "Selected" : "Select"}
+                        color={suggestion.used ? "primary" : "default"}
+                        onClick={() => toggleSuggestion(index)}
+                        clickable
+                      />
+                    </Box>
+                    <Typography variant="body1">
+                      {suggestion.content}
+                    </Typography>
+                  </Box>
+                ))}
+              </Paper>
+            )}
+
+            {activeTab === 0 && (
+              <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="large"
+                  onClick={handleGenerateContract}
+                  disabled={generating || !title || !documentType || !selectedTemplate || userClauses.some(clause => !clause.title)}
+                  startIcon={generating && <CircularProgress size={24} color="inherit" />}
+                  sx={{ minWidth: 200 }}
+                >
+                  {generating ? 'Generating...' : 'Generate & Save Contract'}
+                </Button>
+              </Box>
+            )}
+          </>
         )}
       </Box>
 
@@ -464,7 +721,7 @@ const ContractForm = () => {
       <Dialog
         open={previewOpen}
         onClose={() => setPreviewOpen(false)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
         aria-labelledby="ai-contract-preview"
       >
@@ -472,9 +729,155 @@ const ContractForm = () => {
           AI-Generated Contract Preview
         </DialogTitle>
         <DialogContent dividers>
-          <div dangerouslySetInnerHTML={{ __html: aiGeneratedContract }} />
+          <Grid container spacing={2}>
+            <Grid item xs={8}>
+              <div dangerouslySetInnerHTML={{ __html: aiGeneratedContract }} />
+            </Grid>
+            <Grid item xs={4}>
+              <Box sx={{ borderLeft: '1px solid #e0e0e0', pl: 2, height: '100%' }}>
+                <Tabs value={previewTab} onChange={(event, newValue) => setPreviewTab(newValue)} aria-label="preview tabs">
+                  <Tab label="AI Suggestions" />
+                  <Tab label="Risk Analysis" />
+                </Tabs>
+                
+                <Box role="tabpanel" hidden={previewTab !== 0} sx={{ mt: 2, overflow: 'auto', maxHeight: '500px' }}>
+                  {aiSuggestions.length > 0 ? (
+                    aiSuggestions.map((suggestion, index) => (
+                      <Box 
+                        key={index} 
+                        sx={{ 
+                          mb: 2, 
+                          p: 1, 
+                          border: '1px solid #e0e0e0', 
+                          borderRadius: 1,
+                          backgroundColor: suggestion.used ? 'rgba(63, 81, 181, 0.08)' : 'transparent',
+                        }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                          <Typography variant="subtitle2" fontWeight="bold">
+                            {suggestion.title}
+                          </Typography>
+                          <Chip
+                            label={suggestion.used ? "Selected" : "Select"}
+                            color={suggestion.used ? "primary" : "default"}
+                            onClick={() => toggleSuggestion(index)}
+                            size="small"
+                            clickable
+                          />
+                        </Box>
+                        <Typography variant="body2">
+                          {suggestion.content}
+                        </Typography>
+                      </Box>
+                    ))
+                  ) : (
+                    <Typography variant="body2" color="textSecondary">
+                      No suggestions available. Click "Get AI Suggestions" before generating to see suggestions.
+                    </Typography>
+                  )}
+                </Box>
+
+                <Box role="tabpanel" hidden={previewTab !== 1} sx={{ mt: 2, overflow: 'auto', maxHeight: '500px' }}>
+                  {riskAnalysis.length > 0 ? (
+                    riskAnalysis.map((analysis) => {
+                      const clause = userClauses[analysis.clauseIndex];
+                      let chipColor = 'success';
+                      
+                      if (analysis.riskLevel === 'medium') {
+                        chipColor = 'warning';
+                      } else if (analysis.riskLevel === 'high') {
+                        chipColor = 'error';
+                      }
+                      
+                      return (
+                        <Box 
+                          key={analysis.clauseIndex} 
+                          sx={{ 
+                            mb: 3, 
+                            p: 2, 
+                            border: '1px solid #e0e0e0', 
+                            borderRadius: 2,
+                            borderLeftWidth: 5,
+                            borderLeftColor: 
+                              analysis.riskLevel === 'high' 
+                                ? '#f44336' 
+                                : analysis.riskLevel === 'medium' 
+                                  ? '#ff9800' 
+                                  : '#4caf50'
+                          }}
+                        >
+                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                            <Typography variant="subtitle1" fontWeight="bold">
+                              {clause.title}
+                            </Typography>
+                            <Chip
+                              label={`${analysis.riskLevel.toUpperCase()} RISK`}
+                              color={chipColor}
+                              size="small"
+                            />
+                          </Box>
+                          
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="body2" color="textSecondary" gutterBottom>
+                              Original clause:
+                            </Typography>
+                            <Typography variant="body2" sx={{ backgroundColor: '#f5f5f5', p: 1, borderRadius: 1 }}>
+                              {clause.content}
+                            </Typography>
+                          </Box>
+                          
+                          <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Identified risks:
+                          </Typography>
+                          <ul style={{ marginTop: 8, marginBottom: 16 }}>
+                            {analysis.risks.map((risk, index) => (
+                              <li key={index}>
+                                <Typography variant="body2">{risk}</Typography>
+                              </li>
+                            ))}
+                          </ul>
+                          
+                          <Typography variant="body2" color="textSecondary" gutterBottom>
+                            Suggestions for improvement:
+                          </Typography>
+                          <ul style={{ marginTop: 8 }}>
+                            {analysis.suggestions.map((suggestion, index) => (
+                              <li key={index}>
+                                <Typography variant="body2">{suggestion}</Typography>
+                              </li>
+                            ))}
+                          </ul>
+                        </Box>
+                      );
+                    })
+                  ) : (
+                    <Typography variant="body2" color="textSecondary">
+                      No risk analysis available. Analyze risks to see the analysis.
+                    </Typography>
+                  )}
+                </Box>
+              </Box>
+            </Grid>
+          </Grid>
         </DialogContent>
         <DialogActions>
+          <Button 
+            variant="outlined"
+            color="primary"
+            onClick={getAISuggestions}
+            disabled={loading || !documentType}
+          >
+            {loading ? 'Getting Suggestions...' : 'Get AI Suggestions'}
+          </Button>
+          <Button 
+            variant="outlined"
+            color="warning"
+            onClick={analyzeClauseRisks}
+            disabled={analyzingRisks}
+            startIcon={<WarningIcon />}
+          >
+            Analyze Risks
+          </Button>
           <Button onClick={() => setPreviewOpen(false)}>Cancel</Button>
           <Button 
             onClick={saveAIGeneratedContract} 

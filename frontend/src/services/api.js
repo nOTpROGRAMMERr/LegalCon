@@ -123,6 +123,17 @@ export const generateContractWithAI = async (clauses) => {
   }
 };
 
+// Analyze contract clauses for risks
+export const analyzeContractRisks = async (clauses) => {
+  try {
+    const response = await api.post('/ai/analyze-risks', { clauses });
+    return response.data;
+  } catch (error) {
+    console.error('Error analyzing contract risks:', error);
+    throw error;
+  }
+};
+
 // PDF download
 export const getContractPdf = async (id) => {
   try {
