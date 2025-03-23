@@ -1,0 +1,24 @@
+{
+  "name": "ai-legal-drafts",
+  "version": "1.0.0",
+  "description": "Full-stack application for AI-generated legal drafts and contracts",
+  "scripts": {
+    "frontend": "cd frontend && npm start",
+    "backend": "cd backend && npm run dev",
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "seed": "cd backend && npm run seed"
+  },
+  "keywords": [
+    "legal",
+    "AI",
+    "contracts",
+    "documents",
+    "MERN"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+} 
