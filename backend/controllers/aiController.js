@@ -161,6 +161,8 @@ ${jurisdictionInstruction}
 Generate a professional contract based on the following clauses:
 ${clauses.join('\n')}
 
+IMPORTANT: Check whether the clauses are legally compliant under the jurisdiction of ${jurisdiction}. If yes proceed else give warning.
+
 Please format this as a complete, legally-formatted contract with appropriate sections, 
 including but not limited to parties involved, terms, conditions, and signature blocks.
 

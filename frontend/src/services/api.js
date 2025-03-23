@@ -3,8 +3,8 @@ import axios from 'axios';
 // Dynamically determine the API URL
 // Use environment variable if available
 // Otherwise, try to use the current device's hostname but fallback to localhost if needed
-const API_URL = process.env.REACT_APP_API_URL || `https://legalcon-dvlb.onrender.com/api`;
-//const API_URL = process.env.REACT_APP_API_URL || `http://localhost:5000/api`;
+//const API_URL = process.env.REACT_APP_API_URL || `https://legalcon-dvlb.onrender.com/api`;
+const API_URL = process.env.REACT_APP_API_URL || `http://localhost:5000/api`;
 console.log('API URL:', API_URL); // Log the API URL for debugging
 
 const api = axios.create({

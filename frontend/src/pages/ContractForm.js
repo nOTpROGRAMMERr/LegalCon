@@ -22,7 +22,8 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogTitle
+  DialogTitle,
+  FormHelperText
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
@@ -49,6 +50,46 @@ const ContractForm = () => {
   const [riskAnalysis, setRiskAnalysis] = useState([]);
   const [analyzingRisks, setAnalyzingRisks] = useState(false);
   const [previewTab, setPreviewTab] = useState(0);
+
+  // List of Indian states for the jurisdiction dropdown
+  const indianStates = [
+    'Andhra Pradesh',
+    'Arunachal Pradesh',
+    'Assam',
+    'Bihar',
+    'Chhattisgarh',
+    'Goa',
+    'Gujarat',
+    'Haryana',
+    'Himachal Pradesh',
+    'Jharkhand',
+    'Karnataka',
+    'Kerala',
+    'Madhya Pradesh',
+    'Maharashtra',
+    'Manipur',
+    'Meghalaya',
+    'Mizoram',
+    'Nagaland',
+    'Odisha',
+    'Punjab',
+    'Rajasthan',
+    'Sikkim',
+    'Tamil Nadu',
+    'Telangana',
+    'Tripura',
+    'Uttar Pradesh',
+    'Uttarakhand',
+    'West Bengal',
+    'Andaman and Nicobar Islands',
+    'Chandigarh',
+    'Dadra and Nagar Haveli and Daman and Diu',
+    'Delhi',
+    'Jammu and Kashmir',
+    'Ladakh',
+    'Lakshadweep',
+    'Puducherry'
+  ];
 
   // Fetch contract data if in edit mode
   useEffect(() => {
@@ -288,15 +329,21 @@ const ContractForm = () => {
             </Grid>
             
             <Grid item xs={12} md={6}>
-              <TextField
-                fullWidth
-                label="Jurisdiction"
-                value={jurisdiction}
-                onChange={(e) => setJurisdiction(e.target.value)}
-                placeholder="e.g., California, USA or Delhi, India"
-                helperText="The legal jurisdiction under which this document will be governed"
-                margin="normal"
-              />
+              <FormControl fullWidth margin="normal">
+                <InputLabel>Jurisdiction</InputLabel>
+                <Select
+                  value={jurisdiction}
+                  onChange={(e) => setJurisdiction(e.target.value)}
+                >
+                  <MenuItem value="">Select a jurisdiction</MenuItem>
+                  {indianStates.map((state) => (
+                    <MenuItem key={state} value={state}>
+                      India - {state}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>The legal jurisdiction under which this document will be governed</FormHelperText>
+              </FormControl>
             </Grid>
           </Grid>
         </Paper>
