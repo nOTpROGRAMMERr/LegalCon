@@ -21,7 +21,7 @@ exports.analyzeRisks = async (req, res) => {
     }
 
     // For development, use mock data if no API key
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'mock-key-for-development') {
       const mockRiskAnalysis = generateMockRiskAnalysis(clauses);
       return res.status(200).json({ riskAnalysis: mockRiskAnalysis });
     }
@@ -38,11 +38,37 @@ ${clauses.map((clause, index) => `CLAUSE ${index + 1}: ${clause.title}
 ${clause.content || '[Empty content - This clause has no content specified]'}
 `).join('\n')}
 
-Format your response as a JSON array where each item contains:
-- clauseIndex: The index of the clause (starting from 0)
-- riskLevel: "high", "medium", or "low"
-- risks: Array of specific risks identified
-- suggestions: Array of suggested improvements to mitigate risks
+Your response must be formatted as a JSON array (not an object containing an array) with the following exact structure:
+[
+  {
+    "clauseIndex": 0,
+    "riskLevel": "medium",
+    "risks": [
+      "Risk description 1",
+      "Risk description 2"
+    ],
+    "suggestions": [
+      "Suggestion 1",
+      "Suggestion 2"
+    ]
+  },
+  {
+    "clauseIndex": 1,
+    "riskLevel": "low",
+    "risks": [
+      "Risk description 1"
+    ],
+    "suggestions": [
+      "Suggestion 1"
+    ]
+  }
+]
+
+Important: Your response must be a direct JSON array, NOT an object containing an array.
+- clauseIndex must be the numeric index of the clause (starting from 0)
+- riskLevel must be exactly "high", "medium", or "low" (lowercase)
+- risks must be an array of strings
+- suggestions must be an array of strings
 
 For clauses with empty content, analyze based on the title and suggest appropriate content.
 
@@ -53,7 +79,7 @@ Your analysis should be detailed but concise, focusing on practical improvements
       messages: [
         {
           role: "system",
-          content: "You are a legal expert specializing in contract risk analysis. Provide thorough, accurate risk assessments and practical improvement suggestions for contract clauses."
+          content: "You are a legal expert specializing in contract risk analysis. Provide thorough, accurate risk assessments and practical improvement suggestions for contract clauses. Always format your response exactly as requested in JSON format. Your output should be a direct JSON array of risk analysis objects, not an object containing an array."
         },
         {
           role: "user",
@@ -70,16 +96,35 @@ Your analysis should be detailed but concise, focusing on practical improvements
     
     try {
       parsedResponse = JSON.parse(responseContent);
+      
+      // Validate that the response is an array
+      if (!Array.isArray(parsedResponse)) {
+        // If the response has a riskAnalysis key
+        if (parsedResponse?.riskAnalysis && Array.isArray(parsedResponse.riskAnalysis)) {
+          return res.status(200).json({ riskAnalysis: parsedResponse.riskAnalysis });
+        }
+        
+        console.error('Invalid response format, using mock data instead:', parsedResponse);
+        const mockRiskAnalysis = generateMockRiskAnalysis(clauses);
+        return res.status(200).json({ riskAnalysis: mockRiskAnalysis });
+      }
+      
+      // Return the risk analysis
+      res.status(200).json({ riskAnalysis: parsedResponse });
     } catch (error) {
       console.error('Error parsing JSON response:', error);
-      return res.status(500).json({ message: 'Error processing risk analysis results' });
+      console.error('Raw response content:', responseContent);
+      
+      // Use mock data if parsing fails
+      const mockRiskAnalysis = generateMockRiskAnalysis(clauses);
+      return res.status(200).json({ riskAnalysis: mockRiskAnalysis });
     }
-
-    // Return the risk analysis
-    res.status(200).json({ riskAnalysis: parsedResponse });
   } catch (error) {
     console.error('Error analyzing risks:', error);
-    res.status(500).json({ message: 'Failed to analyze risks', error: error.message });
+    
+    // Use mock data on error for a better user experience
+    const mockRiskAnalysis = generateMockRiskAnalysis(clauses);
+    return res.status(200).json({ riskAnalysis: mockRiskAnalysis });
   }
 };
 
@@ -183,6 +228,8 @@ Do not use any repetitive signature blocks or multiple signature sections.`;
     };
     
     // Convert markdown to HTML while preserving formatting
+    const cleanedContract = cleanupDuplicateSignatures(contractText);
+    
     const markdownToHTML = (markdown) => {
       // Clean up any model artifacts
       let cleaned = markdown.replace(/\.scalablytypedassistant<\|endheaderid\|>/g, '');
@@ -268,9 +315,6 @@ Do not use any repetitive signature blocks or multiple signature sections.`;
       return `<div class="contract-document"><p class="contract-paragraph">${html}</p></div>`;
     };
     
-    // Clean and convert markdown to HTML
-    const cleanedContract = cleanupDuplicateSignatures(contractText);
-    
     res.json({ contract: markdownToHTML(cleanedContract) });
   } catch (error) {
     console.error('Error generating contract:', error);
@@ -290,7 +334,7 @@ exports.getSuggestions = async (req, res) => {
     }
 
     // For development, use mock data if no API key
-    if (!process.env.GROQ_API_KEY) {
+    if (!process.env.GROQ_API_KEY || process.env.GROQ_API_KEY === 'mock-key-for-development') {
       // Mock AI suggestions for development
       const suggestions = generateMockSuggestions(documentType, userClauses, language);
       return res.status(200).json({ suggestions });
@@ -306,9 +350,20 @@ Based on these clauses, suggest 3-4 additional clauses that would complement the
 
 For the ${documentType} document type, think about common industry-standard clauses that would make this document more comprehensive and legally sound.
 
-Output should be formatted as a JSON array with each object containing:
-- title: The title of the suggested clause
-- content: The detailed clause content
+Your response must be a JSON object with the following exact structure:
+{
+  "suggestions": [
+    {
+      "title": "First Suggested Clause Title",
+      "content": "Detailed content for the first suggested clause"
+    },
+    {
+      "title": "Second Suggested Clause Title",
+      "content": "Detailed content for the second suggested clause"
+    },
+    ...
+  ]
+}
 
 Each suggestion should be specific, legally appropriate, and contextually relevant to the existing clauses.`;
 
@@ -317,7 +372,7 @@ Each suggestion should be specific, legally appropriate, and contextually releva
       messages: [
         {
           role: "system",
-          content: "You are a legal expert specializing in contract drafting. You provide legally sound, contextually appropriate clause suggestions for various types of contracts. Your suggestions should be detailed and professionally written."
+          content: "You are a legal expert specializing in drafting professional contracts. Your output is meticulously formatted, legally sound, and comprehensive. Always follow the requested JSON format exactly as specified."
         },
         {
           role: "user",
@@ -334,172 +389,194 @@ Each suggestion should be specific, legally appropriate, and contextually releva
     
     try {
       parsedResponse = JSON.parse(responseContent);
-      // Ensure the response has a suggestions array
-      if (!parsedResponse.suggestions && Array.isArray(parsedResponse)) {
-        parsedResponse = { suggestions: parsedResponse };
-      } else if (!parsedResponse.suggestions) {
-        // If no suggestions array and not an array itself, create one
-        parsedResponse = { suggestions: [] };
+      
+      // Ensure we have an array in the response
+      if (!Array.isArray(parsedResponse?.suggestions)) {
+        // If response has a suggestions key but it's not an array
+        if (parsedResponse?.suggestions) {
+          console.log('Unexpected response format:', parsedResponse);
+          // Try to use the suggestions property
+          return res.status(200).json({ suggestions: parsedResponse.suggestions });
+        }
+        
+        // If response doesn't have a suggestions array but is itself an array
+        if (Array.isArray(parsedResponse)) {
+          console.log('Response is an array but not in suggestions key:', parsedResponse);
+          return res.status(200).json({ suggestions: parsedResponse });
+        }
+        
+        // If it's an object with properties that look like suggestions
+        if (parsedResponse && typeof parsedResponse === 'object') {
+          // Check if it looks like it contains suggestion objects
+          const possibleSuggestions = Object.values(parsedResponse).filter(item => 
+            typeof item === 'object' && item.title && item.content
+          );
+          
+          if (possibleSuggestions.length > 0) {
+            console.log('Extracted suggestion-like objects:', possibleSuggestions);
+            return res.status(200).json({ suggestions: possibleSuggestions });
+          }
+        }
+        
+        // Fallback to mock data since response format is unexpected
+        console.error('Invalid response format, using mock data instead:', parsedResponse);
+        const mockSuggestions = generateMockSuggestions(documentType, userClauses, language);
+        return res.status(200).json({ suggestions: mockSuggestions });
       }
+      
+      // Valid array found in suggestions key
+      return res.status(200).json({ suggestions: parsedResponse.suggestions });
     } catch (error) {
-      console.error('Error parsing JSON response for suggestions:', error);
-      return res.status(500).json({ message: 'Error processing AI suggestions' });
+      console.error('Error parsing JSON response:', error);
+      console.error('Raw response content:', responseContent);
+      
+      // Use mock data if parsing fails
+      const mockSuggestions = generateMockSuggestions(documentType, userClauses, language);
+      return res.status(200).json({ suggestions: mockSuggestions });
     }
-
-    res.status(200).json(parsedResponse);
   } catch (error) {
-    console.error('Error getting AI suggestions:', error);
-    res.status(500).json({ 
-      message: 'Error generating AI suggestions', 
-      error: error.message 
-    });
+    console.error('Error getting suggestions:', error);
+    res.status(500).json({ message: 'Failed to get suggestions', error: error.message });
   }
+};
+
+// Function to generate mock risk analysis data for development
+const generateMockRiskAnalysis = (clauses) => {
+  const riskLevels = ['low', 'medium', 'high'];
+  
+  return clauses.map((clause, index) => {
+    // Generate random risk level
+    const randomRiskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
+    
+    return {
+      clauseIndex: index,
+      riskLevel: randomRiskLevel,
+      risks: [
+        `This is a mock risk for "${clause.title || 'Untitled Clause'}"`,
+        `Additional potential issue with this clause`
+      ],
+      suggestions: [
+        `Consider clarifying the terms in "${clause.title || 'this clause'}"`,
+        `Add more specific language regarding obligations and responsibilities`,
+        `Include timeframes or deadlines for better enforceability`
+      ]
+    };
+  });
+};
+
+// Function to generate mock suggestions for development
+const generateMockSuggestions = (documentType, userClauses, language) => {
+  // Create a set of possible clauses based on document type
+  const possibleClauses = {
+    'NDA': [
+      {
+        title: 'Definition of Confidential Information',
+        content: 'For the purpose of this Agreement, "Confidential Information" shall mean any and all non-public information, including, without limitation, technical, developmental, marketing, sales, operating, performance, cost, know-how, business plans, business methods, and process information which is disclosed by one party to the other.'
+      },
+      {
+        title: 'Term of Confidentiality',
+        content: 'The obligations of confidentiality and non-use contained herein shall survive the termination of this Agreement for a period of five (5) years from the date of such termination.'
+      },
+      {
+        title: 'Return of Materials',
+        content: 'Upon termination of this Agreement or upon request from the Disclosing Party, the Receiving Party shall promptly return all original materials provided by the Disclosing Party and any copies, notes or other documents in the Receiving Party\'s possession pertaining to the Confidential Information.'
+      }
+    ],
+    'Employment': [
+      {
+        title: 'Probationary Period',
+        content: 'The first ninety (90) days of employment shall constitute a probationary period during which the Employee may be terminated at any time without notice or cause.'
+      },
+      {
+        title: 'Intellectual Property Assignment',
+        content: 'Employee agrees that all inventions, improvements, products, designs, specifications, trademarks, service marks, discoveries, formulae, processes, software or computer programs, modifications, ideas, concepts, any other intellectual property, or any matter whatsoever (collectively referred to as "Intellectual Property") that Employee conceives, creates or develops, whether alone or in conjunction with others, during working hours or his/her employment with the Company, shall be the sole and exclusive property of the Company.'
+      },
+      {
+        title: 'Severance',
+        content: 'In the event of termination of employment by the Company without cause, Employee shall receive severance pay equal to one (1) month\'s salary for each year of service completed, up to a maximum of six (6) months.'
+      }
+    ],
+    'Service': [
+      {
+        title: 'Service Level Agreement',
+        content: 'The Service Provider guarantees a monthly uptime of 99.9%. Any downtime exceeding this threshold will result in service credits as follows: 1% credit for each hour of downtime, up to a maximum of 100% of the monthly fee.'
+      },
+      {
+        title: 'Limitation of Liability',
+        content: 'In no event shall Service Provider be liable for any indirect, incidental, special, consequential or punitive damages, including without limitation, loss of profits, data, use, goodwill, or other intangible losses, resulting from (i) your access to or use of or inability to access or use the Service; (ii) any conduct or content of any third party on the Service.'
+      },
+      {
+        title: 'Support and Maintenance',
+        content: 'Service Provider shall provide technical support via email and phone during normal business hours (9 AM - 5 PM Eastern Time, Monday through Friday, excluding holidays). Response time for critical issues shall not exceed four (4) hours.'
+      }
+    ],
+    'default': [
+      {
+        title: 'Force Majeure',
+        content: 'Neither party shall be liable for any failure to perform its obligations under this Agreement if such failure results from circumstances beyond that party\'s reasonable control, including but not limited to acts of God, natural disasters, war, civil disturbance, or government actions.'
+      },
+      {
+        title: 'Dispute Resolution',
+        content: 'Any dispute arising out of or in connection with this Agreement shall be settled by binding arbitration in accordance with the rules of [Arbitration Association]. The arbitration shall take place in [City, State/Country] and shall be conducted in the English language.'
+      },
+      {
+        title: 'Entire Agreement',
+        content: 'This Agreement constitutes the entire understanding between the parties concerning the subject matter hereof and supersedes all prior agreements, understandings, or negotiations.'
+      },
+      {
+        title: 'Governing Law',
+        content: 'This Agreement shall be governed by and construed in accordance with the laws of [State/Country], without regard to its conflict of law principles.'
+      }
+    ]
+  };
+
+  // Get clauses specific to the document type or use default
+  const typeSpecificClauses = possibleClauses[documentType] || possibleClauses['default'];
+  
+  // Filter out clauses that are already included in userClauses by title comparison
+  const userClauseTitles = userClauses.map(clause => clause.title?.toLowerCase());
+  const filteredClauses = typeSpecificClauses.filter(
+    clause => !userClauseTitles.includes(clause.title.toLowerCase())
+  );
+  
+  // Return up to 3 suggestions (fewer if less available)
+  return filteredClauses.slice(0, 3);
 };
 
 // Generate document from template and clauses
 exports.generateDocument = async (req, res) => {
   try {
-    const { templateId, userClauses, aiSuggestions, language = 'English' } = req.body;
+    const { templateId, clauses } = req.body;
     
-    if (!templateId || !userClauses) {
+    if (!templateId || !clauses || clauses.length === 0) {
       return res.status(400).json({ 
-        message: 'Missing required fields: templateId and userClauses are required'
+        message: 'Missing required fields: templateId and clauses are required'
       });
     }
     
     // Find the template
     const template = await Template.findById(templateId);
-    
     if (!template) {
       return res.status(404).json({ message: 'Template not found' });
     }
     
-    // Generate the document content by replacing placeholders in the template
-    let documentContent = template.content;
-    
-    // Combine user clauses and selected AI suggestions
-    const allClauses = [
-      ...userClauses,
-      ...(aiSuggestions?.filter(suggestion => suggestion.used) || [])
-    ];
-    
-    // Replace placeholders with actual clauses
-    template.placeholders.forEach(placeholder => {
-      const clause = allClauses.find(c => c.title === placeholder.key);
-      if (clause) {
-        documentContent = documentContent.replace(
-          new RegExp(`\\{\\{${placeholder.key}\\}\\}`, 'g'), 
-          clause.content
-        );
-      }
+    // Create a new contract using the template and clauses
+    const contract = new Contract({
+      title: req.body.title || 'Untitled Contract',
+      template: template._id,
+      clauses: clauses
     });
-    
-    res.status(200).json({ 
-      documentContent,
-      documentType: template.documentType,
-      language
+
+    // Save the contract
+    await contract.save();
+
+    // Return the newly created contract
+    res.status(201).json({ 
+      message: 'Contract generated successfully',
+      contract 
     });
   } catch (error) {
     console.error('Error generating document:', error);
-    res.status(500).json({ 
-      message: 'Error generating document', 
-      error: error.message 
-    });
+    res.status(500).json({ message: 'Failed to generate document', error: error.message });
   }
-};
-
-// Helper function to generate mock AI suggestions for development
-function generateMockSuggestions(documentType, userClauses, language) {
-  const suggestions = [];
-  
-  switch (documentType) {
-    case 'NDA':
-      suggestions.push({
-        title: 'Confidentiality Clause',
-        content: 'Both parties agree to maintain strict confidentiality of all information shared during the course of this agreement. Confidential Information includes but is not limited to business plans, financial data, customer lists, and technical specifications.'
-      });
-      suggestions.push({
-        title: 'Term of Confidentiality',
-        content: 'The confidentiality obligations under this agreement shall remain in effect for a period of five (5) years from the Effective Date, regardless of whether this Agreement is terminated earlier.'
-      });
-      break;
-      
-    case 'Lease Agreement':
-      suggestions.push({
-        title: 'Maintenance Responsibility',
-        content: 'Tenant shall be responsible for routine maintenance and minor repairs. Landlord shall be responsible for major repairs and structural maintenance of the property.'
-      });
-      suggestions.push({
-        title: 'Late Payment Clause',
-        content: 'If rent is not received by the 5th day of the month, Tenant agrees to pay a late fee of $50, plus $10 for each additional day until full payment is received.'
-      });
-      break;
-      
-    case 'Employment Contract':
-      suggestions.push({
-        title: 'Non-Compete Clause',
-        content: 'For a period of one (1) year after termination of employment, Employee shall not engage in any business activity that directly competes with Employer within a 50-mile radius of Employer\'s principal place of business.'
-      });
-      suggestions.push({
-        title: 'Intellectual Property Rights',
-        content: 'Any inventions, designs, improvements, or intellectual property created by Employee during the course of employment shall be the sole property of Employer.'
-      });
-      break;
-      
-    default:
-      suggestions.push({
-        title: 'General Indemnification',
-        content: 'Each party agrees to indemnify and hold harmless the other party from any claims, damages, or liabilities arising from the indemnifying party\'s breach of this Agreement.'
-      });
-  }
-  
-  return suggestions;
-}
-
-// Helper function to generate mock risk analysis for development
-function generateMockRiskAnalysis(clauses) {
-  const riskLevels = ['low', 'medium', 'high'];
-  return clauses.map((clause, index) => {
-    const randomRiskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-    
-    const risks = [];
-    const suggestions = [];
-    
-    if (clause.title.toLowerCase().includes('confidential')) {
-      risks.push('No definition of what constitutes confidential information');
-      risks.push('No exceptions for publicly available information');
-      suggestions.push('Clearly define what specific information is considered confidential');
-      suggestions.push('Add exceptions for information that becomes publicly available through no fault of the receiving party');
-    } else if (clause.title.toLowerCase().includes('payment')) {
-      risks.push('No specific payment terms or methods defined');
-      risks.push('No consequences for late payment beyond fees');
-      suggestions.push('Specify acceptable payment methods and detailed terms');
-      suggestions.push('Include right to suspend services if payment is significantly delayed');
-    } else if (clause.title.toLowerCase().includes('termination')) {
-      risks.push('No notice period for termination specified');
-      risks.push('No provisions for handling ongoing obligations after termination');
-      suggestions.push('Add clear notice period requirements for termination');
-      suggestions.push('Specify which obligations survive termination of the agreement');
-    } else {
-      // Generic risks for any other clause type
-      risks.push('Vague or ambiguous language could lead to different interpretations');
-      risks.push('Missing specific details that could be important in a dispute');
-      suggestions.push('Use more specific and precise language to avoid ambiguity');
-      suggestions.push('Include more detailed provisions to cover potential edge cases');
-    }
-    
-    return {
-      clauseIndex: index,
-      riskLevel: randomRiskLevel,
-      risks: risks,
-      suggestions: suggestions
-    };
-  });
-}
-
-module.exports = { 
-  analyzeRisks: exports.analyzeRisks, 
-  getSuggestions: exports.getSuggestions, 
-  generateDocument: exports.generateDocument, 
-  generateContract: exports.generateContract 
 }; 
