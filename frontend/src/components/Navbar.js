@@ -23,7 +23,7 @@ const Navbar = () => {
               fontWeight: 'bold'
             }}
           >
-            LegalDrafts AI
+            LegalCon
           </Typography>
         </Box>
         

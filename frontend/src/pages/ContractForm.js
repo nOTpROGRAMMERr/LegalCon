@@ -36,6 +36,7 @@ const ContractForm = () => {
   const [title, setTitle] = useState('');
   const [documentType, setDocumentType] = useState('');
   const [language, setLanguage] = useState('English');
+  const [jurisdiction, setJurisdiction] = useState('');
   const [userClauses, setUserClauses] = useState([{ title: '', content: '' }]);
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -59,6 +60,7 @@ const ContractForm = () => {
           setTitle(contractData.title);
           setDocumentType(contractData.documentType);
           setLanguage(contractData.language || 'English');
+          setJurisdiction(contractData.jurisdiction || '');
           setUserClauses(contractData.userClauses || [{ title: '', content: '' }]);
           setAiSuggestions(contractData.aiSuggestions || []);
           setFinalContent(contractData.finalContent || '');
@@ -176,7 +178,7 @@ const ContractForm = () => {
       }
 
       // Generate contract using AI
-      const response = await generateContractWithAI(formattedClauses, language);
+      const response = await generateContractWithAI(formattedClauses, language, jurisdiction);
       setAiGeneratedContract(response.contract);
       setFinalContent(response.contract);
       setPreviewOpen(true);
@@ -199,7 +201,8 @@ const ContractForm = () => {
         userClauses,
         aiSuggestions: aiSuggestions.filter(s => s.used),
         finalContent,
-        language
+        language,
+        jurisdiction
       };
 
       let savedContract;
@@ -280,11 +283,20 @@ const ContractForm = () => {
                 >
                   <MenuItem value="English">English</MenuItem>
                   <MenuItem value="Hindi">Hindi</MenuItem>
-                  <MenuItem value="Spanish">Spanish</MenuItem>
-                  <MenuItem value="French">French</MenuItem>
-                  <MenuItem value="German">German</MenuItem>
                 </Select>
               </FormControl>
+            </Grid>
+            
+            <Grid item xs={12} md={6}>
+              <TextField
+                fullWidth
+                label="Jurisdiction"
+                value={jurisdiction}
+                onChange={(e) => setJurisdiction(e.target.value)}
+                placeholder="e.g., California, USA or Delhi, India"
+                helperText="The legal jurisdiction under which this document will be governed"
+                margin="normal"
+              />
             </Grid>
           </Grid>
         </Paper>

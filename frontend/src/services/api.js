@@ -4,7 +4,7 @@ import axios from 'axios';
 // Use environment variable if available
 // Otherwise, try to use the current device's hostname but fallback to localhost if needed
 const API_URL = process.env.REACT_APP_API_URL || `https://legalcon-dvlb.onrender.com/api`;
-
+//const API_URL = process.env.REACT_APP_API_URL || `http://localhost:5000/api`;
 console.log('API URL:', API_URL); // Log the API URL for debugging
 
 const api = axios.create({
@@ -118,9 +118,9 @@ export const generateDocument = async (data) => {
 };
 
 // Generate contract directly using AI
-export const generateContractWithAI = async (clauses, language = 'English') => {
+export const generateContractWithAI = async (clauses, language = 'English', jurisdiction = '') => {
   try {
-    const response = await api.post('/ai/generate-contract', { clauses, language });
+    const response = await api.post('/ai/generate-contract', { clauses, language, jurisdiction });
     return response.data;
   } catch (error) {
     console.error('Error generating contract with AI:', error);

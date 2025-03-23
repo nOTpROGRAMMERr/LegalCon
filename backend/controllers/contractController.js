@@ -29,7 +29,7 @@ exports.getContractById = async (req, res) => {
 // Create a new contract
 exports.createContract = async (req, res) => {
   try {
-    const { title, documentType, userClauses, aiSuggestions, finalContent, language } = req.body;
+    const { title, documentType, userClauses, aiSuggestions, finalContent, language, jurisdiction } = req.body;
     
     const newContract = new Contract({
       title,
@@ -37,7 +37,8 @@ exports.createContract = async (req, res) => {
       userClauses,
       aiSuggestions,
       finalContent,
-      language
+      language,
+      jurisdiction
     });
     
     const savedContract = await newContract.save();
@@ -50,7 +51,7 @@ exports.createContract = async (req, res) => {
 // Update a contract
 exports.updateContract = async (req, res) => {
   try {
-    const { title, documentType, userClauses, aiSuggestions, finalContent, language } = req.body;
+    const { title, documentType, userClauses, aiSuggestions, finalContent, language, jurisdiction } = req.body;
     
     const updatedContract = await Contract.findByIdAndUpdate(
       req.params.id,
@@ -61,6 +62,7 @@ exports.updateContract = async (req, res) => {
         aiSuggestions,
         finalContent,
         language,
+        jurisdiction,
         updatedAt: Date.now()
       },
       { new: true }
