@@ -118,9 +118,9 @@ export const generateDocument = async (data) => {
 };
 
 // Generate contract directly using AI
-export const generateContractWithAI = async (clauses) => {
+export const generateContractWithAI = async (clauses, language = 'English') => {
   try {
-    const response = await api.post('/ai/generate-contract', { clauses });
+    const response = await api.post('/ai/generate-contract', { clauses, language });
     return response.data;
   } catch (error) {
     console.error('Error generating contract with AI:', error);
@@ -129,9 +129,9 @@ export const generateContractWithAI = async (clauses) => {
 };
 
 // Analyze contract clauses for risks
-export const analyzeContractRisks = async (clauses) => {
+export const analyzeContractRisks = async (clauses, language = 'English') => {
   try {
-    const response = await api.post('/ai/analyze-risks', { clauses });
+    const response = await api.post('/ai/analyze-risks', { clauses, language });
     return response.data;
   } catch (error) {
     console.error('Error analyzing contract risks:', error);

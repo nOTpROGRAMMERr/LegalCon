@@ -12,7 +12,7 @@ const groq = new Groq({
 // Analyze clauses for potential risks
 exports.analyzeRisks = async (req, res) => {
   try {
-    const { clauses } = req.body;
+    const { clauses, language = 'English' } = req.body;
     
     if (!clauses || clauses.length === 0) {
       return res.status(400).json({ 
@@ -26,11 +26,19 @@ exports.analyzeRisks = async (req, res) => {
       return res.status(200).json({ riskAnalysis: mockRiskAnalysis });
     }
 
+    // Language-specific instructions
+    const languageInstruction = language === 'Hindi' 
+      ? 'Analyze the contract clauses and provide risk analysis in Hindi language. Use proper Hindi legal terminology.' 
+      : '';
+
     // Format the prompt for the AI
-    const prompt = `Analyze the following contract clauses for potential legal, business, and compliance risks. For each clause, provide:
+    const prompt = `${languageInstruction}
+Analyze the following contract clauses for potential legal, business, and compliance risks. For each clause, provide:
 1. Risk Level (High, Medium, Low)
 2. Risk Description
 3. Suggested Improvements
+
+${language === 'Hindi' ? 'Provide all risk descriptions and suggestions in Hindi.' : ''}
 
 Here are the clauses:
 
@@ -131,7 +139,7 @@ Your analysis should be detailed but concise, focusing on practical improvements
 // Generate contract directly using Groq AI
 exports.generateContract = async (req, res) => {
   try {
-    const { clauses } = req.body;
+    const { clauses, language = 'English' } = req.body;
     
     if (!clauses || clauses.length === 0) {
       return res.status(400).json({ 
@@ -140,7 +148,12 @@ exports.generateContract = async (req, res) => {
     }
 
     // Format the prompt for the AI
-    const prompt = `Generate a professional contract based on the following clauses:
+    const languageInstruction = language === 'Hindi' 
+      ? 'Generate a professional contract in Hindi language. Use proper Hindi legal terminology.' 
+      : '';
+
+    const prompt = `${languageInstruction}
+Generate a professional contract based on the following clauses:
 ${clauses.join('\n')}
 
 Please format this as a complete, legally-formatted contract with appropriate sections, 
@@ -340,8 +353,14 @@ exports.getSuggestions = async (req, res) => {
       return res.status(200).json({ suggestions });
     }
 
+    // Language-specific instructions
+    const languageInstruction = language === 'Hindi' 
+      ? `Generate suggestions in Hindi language. Use proper Hindi legal terminology for a ${documentType} contract.`
+      : '';
+
     // Format the prompt for the AI to generate contextual suggestions
-    const prompt = `Generate relevant additional clause suggestions for a ${documentType} contract based on the following existing clauses.
+    const prompt = `${languageInstruction}
+Generate relevant additional clause suggestions for a ${documentType} contract based on the following existing clauses.
 
 Existing clauses:
 ${userClauses.map((clause, index) => `${index + 1}. ${clause.title}: ${clause.content}`).join('\n')}
@@ -349,6 +368,8 @@ ${userClauses.map((clause, index) => `${index + 1}. ${clause.title}: ${clause.co
 Based on these clauses, suggest 3-4 additional clauses that would complement the contract. These should be clauses that are missing but would be important to include for this type of document.
 
 For the ${documentType} document type, think about common industry-standard clauses that would make this document more comprehensive and legally sound.
+
+${language === 'Hindi' ? 'Please provide all suggestions in Hindi language.' : ''}
 
 Your response must be a JSON object with the following exact structure:
 {
