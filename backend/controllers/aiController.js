@@ -440,26 +440,186 @@ Each suggestion should be specific, legally appropriate, and contextually releva
   }
 };
 
-// Function to generate mock risk analysis data for development
+// Function to generate substantive mock risk analysis data for development
 const generateMockRiskAnalysis = (clauses) => {
-  const riskLevels = ['low', 'medium', 'high'];
-  
-  return clauses.map((clause, index) => {
-    // Generate random risk level
-    const randomRiskLevel = riskLevels[Math.floor(Math.random() * riskLevels.length)];
-    
-    return {
-      clauseIndex: index,
-      riskLevel: randomRiskLevel,
+  // Define common clause risk patterns for more realistic mock data
+  const clauseRiskPatterns = {
+    // Termination related clauses
+    'termination': {
+      riskLevel: 'high',
       risks: [
-        `This is a mock risk for "${clause.title || 'Untitled Clause'}"`,
-        `Additional potential issue with this clause`
+        'Termination conditions are vague and could lead to disputes about when termination is justified',
+        'No notice period specified for termination, creating uncertainty for both parties',
+        'No distinction between termination for cause and termination for convenience',
+        'No clear process for handling pending obligations upon termination'
       ],
       suggestions: [
-        `Consider clarifying the terms in "${clause.title || 'this clause'}"`,
-        `Add more specific language regarding obligations and responsibilities`,
-        `Include timeframes or deadlines for better enforceability`
+        'Clearly define what constitutes grounds for termination (e.g., material breach, bankruptcy, etc.)',
+        'Specify a notice period (e.g., 30 days written notice) for termination without cause',
+        'Include provisions for pending work, payments, and transition assistance post-termination',
+        'Consider adding a cure period for breaches that can be remedied'
       ]
+    },
+    
+    // Confidentiality related clauses
+    'confidential': {
+      riskLevel: 'medium',
+      risks: [
+        'Definition of confidential information is too broad or too narrow',
+        'No specified duration for confidentiality obligations after agreement ends',
+        'Inadequate exceptions to confidentiality (e.g., publicly available information)',
+        'No provisions for handling data breaches or unauthorized disclosures'
+      ],
+      suggestions: [
+        'Clearly define what constitutes confidential information with specific examples',
+        'Specify a reasonable time period for confidentiality obligations post-termination',
+        'Include standard exceptions (public domain, independently developed, legally required disclosures)',
+        'Add notification requirements for potential or actual breaches'
+      ]
+    },
+    
+    // Payment related clauses
+    'payment': {
+      riskLevel: 'medium',
+      risks: [
+        'Payment terms lack specific due dates or payment methods',
+        'No consequences specified for late payments',
+        'Currency and tax responsibilities are not clearly defined',
+        'No provisions for disputing incorrect invoices'
+      ],
+      suggestions: [
+        'Clearly state payment due dates, acceptable payment methods, and currency',
+        'Include late payment penalties or interest provisions',
+        'Specify which party bears responsibility for taxes and fees',
+        'Add a process for disputing charges within a specific timeframe'
+      ]
+    },
+    
+    // Liability related clauses
+    'liability': {
+      riskLevel: 'high',
+      risks: [
+        'Limitation of liability may be too broad to be enforceable',
+        'No distinction between direct and consequential damages',
+        'No liability cap or the cap is unreasonably low/high',
+        'Exclusions may be unenforceable in some jurisdictions'
+      ],
+      suggestions: [
+        'Make liability limitations mutual and reasonable',
+        'Clearly define what constitutes direct vs. indirect/consequential damages',
+        'Consider a liability cap tied to contract value or insurance limits',
+        'Review exclusions for enforceability in relevant jurisdictions'
+      ]
+    },
+    
+    // Intellectual property related clauses
+    'intellectual property': {
+      riskLevel: 'high',
+      risks: [
+        'Unclear ownership of newly created intellectual property',
+        'No provisions for pre-existing IP used in deliverables',
+        'Insufficient protection against third-party IP claims',
+        'No provisions for open source software usage'
+      ],
+      suggestions: [
+        'Clearly define ownership rights for all created materials',
+        'Include license provisions for pre-existing IP incorporated into deliverables',
+        'Add mutual indemnification for third-party IP claims',
+        'Address open source software usage and compliance requirements'
+      ]
+    },
+    
+    // Indemnification related clauses
+    'indemnification': {
+      riskLevel: 'medium',
+      risks: [
+        'Indemnification obligations are one-sided',
+        'Scope of indemnified claims is too broad or unclear',
+        'No defined process for handling indemnified claims',
+        'No cap on indemnification obligations'
+      ],
+      suggestions: [
+        'Make indemnification provisions reciprocal where appropriate',
+        'Clearly define types of claims subject to indemnification',
+        'Include notification requirements and cooperation procedures',
+        'Consider reasonable caps on indemnification obligations'
+      ]
+    },
+    
+    // Default catch-all for other clauses
+    'default': {
+      riskLevel: 'medium',
+      risks: [
+        'Clause language is vague and open to multiple interpretations',
+        'Key terms are undefined or inconsistently used',
+        'Clause may conflict with other provisions in the agreement',
+        'Regulatory compliance issues may exist in certain jurisdictions'
+      ],
+      suggestions: [
+        'Use clear, specific language with defined terms',
+        'Ensure consistent terminology throughout the agreement',
+        'Review the entire agreement for potential conflicts',
+        'Consider jurisdiction-specific requirements'
+      ]
+    }
+  };
+  
+  return clauses.map((clause, index) => {
+    const title = clause.title?.toLowerCase() || '';
+    const content = clause.content?.toLowerCase() || '';
+    
+    // Determine which pattern to use based on clause title and content
+    let pattern = clauseRiskPatterns.default;
+    
+    // Check for matching patterns
+    Object.entries(clauseRiskPatterns).forEach(([key, value]) => {
+      if (key !== 'default' && (title.includes(key) || content.includes(key))) {
+        pattern = value;
+      }
+    });
+    
+    // For empty content clauses, always return high risk
+    if (!clause.content || clause.content.trim() === '') {
+      return {
+        clauseIndex: index,
+        riskLevel: 'high',
+        risks: [
+          `The "${clause.title}" clause has no content`,
+          'Empty clauses create significant contractual gaps',
+          'May render related provisions unenforceable'
+        ],
+        suggestions: [
+          `Add comprehensive content to the "${clause.title}" clause`,
+          'Include all necessary terms and conditions',
+          'Consider consulting standard templates for this type of clause'
+        ]
+      };
+    }
+    
+    // For very short clauses (less than 15 words), return high risk
+    if (clause.content && clause.content.split(' ').length < 15) {
+      return {
+        clauseIndex: index,
+        riskLevel: 'high',
+        risks: [
+          `The "${clause.title}" clause is too brief and lacks detail`,
+          'Insufficient detail increases risk of misinterpretation and disputes',
+          'Critical elements may be missing from this clause'
+        ],
+        suggestions: [
+          `Expand the "${clause.title}" clause to address all relevant aspects`,
+          'Include specific terms, conditions, and exceptions',
+          'Add details about implementation and enforcement'
+        ]
+      };
+    }
+    
+    // Return analysis based on matched pattern
+    return {
+      clauseIndex: index,
+      riskLevel: pattern.riskLevel,
+      risks: pattern.risks.slice(0, 3), // Use up to 3 risks from the pattern
+      suggestions: pattern.suggestions.slice(0, 3) // Use up to 3 suggestions from the pattern
     };
   });
 };
