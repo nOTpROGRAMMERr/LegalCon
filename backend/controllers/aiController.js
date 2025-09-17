@@ -94,7 +94,7 @@ Your analysis should be detailed but concise, focusing on practical improvements
           content: prompt
         }
       ],
-      model: "llama3-70b-8192",
+      model: "openai/gpt-oss-120b",
       response_format: { type: "json_object" }
     });
 
@@ -230,7 +230,7 @@ Do not use any repetitive signature blocks or multiple signature sections.`;
           content: prompt
         }
       ],
-      model: "llama3-70b-8192"
+      model: "openai/gpt-oss-120b"
     });
 
     // Get the generated contract
@@ -418,7 +418,7 @@ Each suggestion should be specific, legally appropriate, and contextually releva
           content: prompt
         }
       ],
-      model: "llama3-70b-8192",
+      model: "openai/gpt-oss-120b",
       response_format: { type: "json_object" }
     });
 
